@@ -1,36 +1,39 @@
 package com.example
 
+import java.net.InetSocketAddress
+
 import akka.actor.{ActorSystem, Props}
 import akka.event.Logging.LogEvent
 import akka.pattern.ask
 import akka.testkit.{EventFilter, ImplicitSender, TestActorRef, TestKit}
 import akka.util.Timeout
+import spray.can.Http
 import scala.concurrent.duration._
 import org.specs2.mutable.SpecificationLike
 import spray.http.{Uri, HttpResponse, HttpMethods, HttpRequest}
 
 import scala.concurrent.{Await, Future}
 
-class JsonPusherSpec extends TestKit(ActorSystem()) with ImplicitSender
+class HttpPusherSpec extends TestKit(ActorSystem()) with ImplicitSender
 with SpecificationLike with DeactivatedTimeConversions {
+
+  sequential
 
   val actor = TestActorRef[HttpPusher]
 
   implicit val timeout = Timeout(5.seconds)
 
-  "JsonPusher" should {
-
+  "HttpPusher" should {
 
     val req = HttpRequest(HttpMethods.GET)
     val reqSa = HttpRequest(HttpMethods.GET, Uri("sa"))
 
-    val resp = HttpResponse(entity = "WAT? this is not a valid endpoint. Try one of these instead: sa, oe, ta, vh, ft, mo")
+    val resp = HttpResponse(entity = "WAT? this is not a valid endpoint")
 
-    "save only messages that starts with 'A'" in {
-      actor ! req
-      //      actor ! SimpleMessage("This message should not be saved")
-      //      actor ! SimpleMessage("Another message for you")
-      //      actor.underlyingActor.state.length mustEqual 2
+    "respond with Http.Register to Http.Connected" in {
+      val pusher = system.actorOf(Props[HttpPusher], "pusher")
+      pusher ! new Http.Connected(new InetSocketAddress("localhost", 1234), new InetSocketAddress("localhost", 5678))
+      expectMsg(Http.Register(pusher))
       success
     }
 
