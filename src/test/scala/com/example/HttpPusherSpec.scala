@@ -17,6 +17,7 @@ import scala.concurrent.{Await, Future}
 class HttpPusherSpec extends TestKit(ActorSystem()) with ImplicitSender
 with SpecificationLike with DeactivatedTimeConversions {
 
+  // without being sequential, tests fail randomly
   sequential
 
   val actor = TestActorRef[HttpPusher]
@@ -25,53 +26,51 @@ with SpecificationLike with DeactivatedTimeConversions {
 
   "HttpPusher" should {
 
-    val req = HttpRequest(HttpMethods.GET)
-    val reqSa = HttpRequest(HttpMethods.GET, Uri("sa"))
-
-    val resp = HttpResponse(entity = "WAT? this is not a valid endpoint")
-
     "respond with Http.Register to Http.Connected" in {
       val pusher = system.actorOf(Props[HttpPusher], "pusher")
       pusher ! new Http.Connected(new InetSocketAddress("localhost", 1234), new InetSocketAddress("localhost", 5678))
       expectMsg(Http.Register(pusher))
       success
     }
+  }
 
+  "Actor" should {
 
-    "sync" in {
-      val actorProps = Props(new HttpPusher())
-      val actor = system.actorOf(actorProps, "pusher_sync")
+    val expectedResponse = HttpResponse(entity = "WAT? this is not a valid endpoint")
+    val req: HttpRequest = HttpRequest(HttpMethods.GET)
 
+    val actorProps = Props(new HttpPusher())
+    val actor = system.actorOf(actorProps, "pusher_sync")
+
+    "be testable synchronously" in {
       val future: Future[Any] = actor ? req
-      val result: HttpResponse = Await.result(future, 5.seconds).asInstanceOf[HttpResponse]
-      println("response: " + result)
+      val response: HttpResponse = Await.result(future, 5.seconds).asInstanceOf[HttpResponse]
+      response shouldEqual expectedResponse
       true
     }
 
-    "async entity" in {
-      val actorProps = Props(new HttpPusher())
-      val actor = system.actorOf(actorProps, "pusher_async")
+    val expectedMsg: String = "serving request for sa with startId: 1, batch size: 100"
+    val reqSa = HttpRequest(HttpMethods.GET, Uri("sa"))
 
+    "be testable through the EventFilter and a custom interceptor" in {
       val interceptor: PartialFunction[LogEvent, Boolean] = {
         case x => {
-          println(s"received LogEvent: $x")
           val message: String = x.message.asInstanceOf[String]
-          message.contains("serving request for sa with startId: 1, batch size: 100")
+          message.contains(expectedMsg)
         }
       }
-
       EventFilter.custom(test = interceptor, occurrences = 1) intercept {actor ! reqSa}
-      EventFilter.info(pattern = "serving request for sa with startId: 1, batch size: 100", occurrences = 1) intercept {actor ! reqSa}
-
       true
     }
 
-    "async missing entity" in {
-      val actorProps = Props(new HttpPusher())
-      val actor = system.actorOf(actorProps, "pusher_async_missing")
+    "be testable through the EventFilter and a msg pattern" in {
+      EventFilter.info(pattern = expectedMsg, occurrences = 1) intercept {actor ! reqSa}
+      true
+    }
 
+    "be testable through msg expectation" in {
       actor ! req
-      expectMsg(resp)
+      expectMsg(expectedResponse)
       true
     }
 
