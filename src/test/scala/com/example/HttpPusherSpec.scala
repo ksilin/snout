@@ -2,10 +2,10 @@ package com.example
 
 import java.net.InetSocketAddress
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorRef, UnhandledMessage, ActorSystem, Props}
 import akka.event.Logging.LogEvent
 import akka.pattern.ask
-import akka.testkit.{EventFilter, ImplicitSender, TestActorRef, TestKit}
+import akka.testkit._
 import akka.util.Timeout
 import spray.can.Http
 import scala.concurrent.duration._
@@ -15,7 +15,7 @@ import spray.http.{Uri, HttpResponse, HttpMethods, HttpRequest}
 import scala.concurrent.{Await, Future}
 
 class HttpPusherSpec extends TestKit(ActorSystem()) with ImplicitSender
-with SpecificationLike with DeactivatedTimeConversions {
+with SpecificationLike with DeactivatedTimeConversions with SpecHelper{
 
   // without being sequential, tests fail randomly
   sequential
@@ -30,7 +30,6 @@ with SpecificationLike with DeactivatedTimeConversions {
       val pusher = system.actorOf(Props[HttpPusher], "pusher")
       pusher ! new Http.Connected(new InetSocketAddress("localhost", 1234), new InetSocketAddress("localhost", 5678))
       expectMsg(Http.Register(pusher))
-      success
     }
   }
 
@@ -39,14 +38,10 @@ with SpecificationLike with DeactivatedTimeConversions {
     val expectedResponse = HttpResponse(entity = "WAT? this is not a valid endpoint")
     val req: HttpRequest = HttpRequest(HttpMethods.GET)
 
-    val actorProps = Props(new HttpPusher())
-    val actor = system.actorOf(actorProps, "pusher_sync")
-
     "be testable synchronously" in {
       val future: Future[Any] = actor ? req
       val response: HttpResponse = Await.result(future, 5.seconds).asInstanceOf[HttpResponse]
       response shouldEqual expectedResponse
-      true
     }
 
     val expectedMsg: String = "serving request for sa with startId: 1, batch size: 100"
@@ -60,19 +55,15 @@ with SpecificationLike with DeactivatedTimeConversions {
         }
       }
       EventFilter.custom(test = interceptor, occurrences = 1) intercept {actor ! reqSa}
-      true
     }
 
     "be testable through the EventFilter and a msg pattern" in {
       EventFilter.info(pattern = expectedMsg, occurrences = 1) intercept {actor ! reqSa}
-      true
     }
 
     "be testable through msg expectation" in {
       actor ! req
       expectMsg(expectedResponse)
-      true
     }
-
   }
 }

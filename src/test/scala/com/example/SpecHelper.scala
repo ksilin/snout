@@ -1,5 +1,7 @@
 package com.example
 
+import org.specs2.execute.{Success, AsResult}
+
 trait SpecHelper {
 
   def timed[A](s: String)(x: ⇒ A): Double = {
@@ -12,4 +14,12 @@ trait SpecHelper {
     }
     ms
   }
+
+  implicit def anyToSuccess[T]: AsResult[T] = new AsResult[T] {
+    def asResult(t: =>T) = {
+      t
+      Success()
+    }
+  }
+
 }
