@@ -34,7 +34,7 @@ with SpecificationLike with DeactivatedTimeConversions with SpecHelper{
 
       val interceptor: PartialFunction[LogEvent, Boolean] = {
         case x => {
-          println(s"received LogEvent: $x")
+          println(s"event filter received LogEvent: $x")
           val message: String = x.message.asInstanceOf[String]
           message.contains("Sending response chunk with id")
         }
@@ -45,9 +45,9 @@ with SpecificationLike with DeactivatedTimeConversions with SpecHelper{
 
     "be testable through expectating no answer" in {
       // TODO - I would have thought, the message will remain unhandled
-      context.system.eventStream.subscribe(myListenerActorRef, classOf[DeadLetter])
+      system.eventStream.subscribe(fake, classOf[DeadLetter])
       fake ! "hi"
-      println("ded letters" + system.deadLetters.toString())
+      println("dead letters" + system.deadLetters.toString())
       expectNoMsg()
     }
   }
